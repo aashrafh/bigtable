@@ -18,7 +18,9 @@
   },
   "homepage": "https://github.com/aashrafh/bigtable#readme",
   "dependencies": {
+    "express": "^4.17.1",
     "mongodb": "^3.6.9",
-    "mongoose": "^5.12.12"
+    "mongoose": "^5.12.12",
+    "socket.io": "^4.1.2"
   }
 }
