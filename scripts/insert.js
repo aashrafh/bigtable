@@ -1,11 +1,8 @@
 const fs = require("fs");
-let moviesJSON = JSON.parse(fs.readFileSync("movies.json"));
-
-// console.log(movies.length);
-
 const mongoose = require("mongoose");
+const constants = require("./constants");
 
-const constants = require("./scripts/constants");
+let moviesJSON = JSON.parse(fs.readFileSync("../movies.json"));
 
 mongoose.connect(`${constants.connectionString}`, {
   useNewUrlParser: true,
@@ -52,12 +49,3 @@ Movie.collection.insert(moviesJSON, function (err, moviesJSON) {
     console.log("Documents inserted to Collection");
   }
 });
-
-// for (let i = 201; i < 801; i++) {
-//   for (let j = i; i < i + 100; j++) {
-//     const newMovie = new Movie(moviesJSON[j]);
-//     newMovie.save(function (err, newMovie) {
-//       if (err) return console.error(err);
-//     });
-//   }
-// }

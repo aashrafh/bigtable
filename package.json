@@ -18,7 +18,7 @@
   },
   "homepage": "https://github.com/aashrafh/bigtable#readme",
   "dependencies": {
-    "csvtojson": "^2.0.10",
-    "mongodb": "^3.6.9"
+    "mongodb": "^3.6.9",
+    "mongoose": "^5.12.12"
   }
 }
