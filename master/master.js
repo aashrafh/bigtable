@@ -1,15 +1,16 @@
 const mongoose = require("mongoose");
 const constants = require("../scripts/constants");
+const MovieModel = require("../Movie_model");
+
 const express = require("express");
 const app = express();
 const http = require("http");
 const master = http.createServer(app);
-const { Server } = require("socket.io");
-const MovieModel = require("../Movie_model");
-const io = new Server(master);
 
 let metadata = {};
 let tablets = [];
+let servers = [];
+let clients = [];
 
 mongoose.connect(`${constants.connectionString}`, {
   useNewUrlParser: true,
@@ -19,11 +20,7 @@ mongoose.connect(`${constants.connectionString}`, {
 const db = mongoose.connection;
 db.on("error", console.error.bind(console, "connection error:"));
 db.once("open", function () {
-  console.log("You'r connected!");
-});
-
-master.listen(8080, () => {
-  console.log("Master: listening on *:8080");
+  console.log("You'r connected to the database!");
 });
 
 function metadataDB() {
@@ -36,83 +33,6 @@ function metadataDB() {
   return Metadata;
 }
 
-const balanceThreshold = 10;
-async function balanceLoad() {
-  if (
-    Math.abs(servers[0].tabletsNumber - servers[1].tabletsNumber) >
-    balanceThreshold
-  ) {
-    await asignServers();
-    return false;
-  }
-  return true;
-}
-
-async function connectSocket() {
-  let serverCount = 0;
-  let servers = [
-    {
-      id: "",
-      tabletsNumber: Math.floor(tablets.length / 2),
-    },
-    {
-      id: "",
-      tabletsNumber: Math.floor(tablets.length / 2),
-    },
-  ];
-
-  io.on("connection", (socket) => {
-    socket.on("get-meta", (msg) => {
-      socket.emit("send-meta", metadata);
-    });
-
-    socket.on("server-connect", (serverSocket) => {
-      servers[serverCount].id = socket.id;
-      socket.emit(
-        "send-data",
-        tablets.slice(
-          serverCount * Math.floor(tablets.length / 2),
-          (serverCount + 1) * Math.floor(tablets.length / 2)
-        )
-      );
-      serverCount++;
-    });
-
-    socket.on("confirm-load", async (tabletsNumber) => {
-      if (servers[0].id == socket.id) {
-        servers[0].tabletsNumber = tabletsNumber;
-      } else {
-        servers[1].tabletsNumber = tabletsNumber;
-      }
-
-      let balanced = await balanceLoad();
-      if (!balanced) {
-        socket.emit("update-meta", metadata);
-        socket.emit("update-data");
-      }
-    });
-
-    socket.on("update-data", (socketServer) => {
-      if (servers[0].id == socket.id) {
-        socket.emit(
-          "new-data",
-          tablets.slice(0, Math.floor(tablets.length / 2))
-        );
-      } else {
-        socket.emit(
-          "new-data",
-          tablets.slice(Math.floor(tablets.length / 2), tablets.length.legnth)
-        );
-      }
-    });
-  });
-}
-
-/* 
-1. Responsible for dividing data tables into tablets.
-2. Responsible for assigning tablets to tablet servers 
-3. Metadata table indicating the row key range (start key-end key) for each tablet server.
-*/
 async function divideTables(Movie) {
   tablets = await Movie.find({}).sort({ year: 1 }).limit(100);
 
@@ -127,40 +47,63 @@ async function divideTables(Movie) {
   return rangeKeys;
 }
 
+async function metaToClients(meta) {
+  for (let i = 0; i < clients.length; i++) {
+    clients[i].emit("send-meta", meta);
+  }
+}
+
+async function tabletsToServers(meta) {
+  for (let i = 0; i < servers.length; i++) {
+    servers[i].emit(
+      "send-tablets",
+      tablets.slice(
+        i * Math.floor(tablets.length / 2),
+        (i + 1) * Math.floor(tablets.length / 2)
+      )
+    );
+    console.log("Emitting the tablets");
+  }
+}
+
+function buildMeta(rangeKeys) {
+  return {
+    firstServer: {
+      setA: {
+        startYear: rangeKeys[0].startYear,
+        endYear: rangeKeys[0].endYear,
+      },
+      setB: {
+        startYear: rangeKeys[1].startYear,
+        endYear: rangeKeys[1].endYear,
+      },
+      range: {
+        startYear: rangeKeys[0].startYear,
+        endYear: rangeKeys[1].endYear,
+      },
+    },
+    secondServer: {
+      setA: {
+        startYear: rangeKeys[2].startYear,
+        endYear: rangeKeys[2].endYear,
+      },
+      setB: {
+        startYear: rangeKeys[3].startYear,
+        endYear: rangeKeys[3].endYear,
+      },
+      range: {
+        startYear: rangeKeys[2].startYear,
+        endYear: rangeKeys[3].endYear,
+      },
+    },
+  };
+}
+
 async function asignServers() {
-  let Movie = MovieModel;
+  const Movie = MovieModel;
   divideTables(Movie)
     .then((rangeKeys) => {
-      metadata = {
-        firstServer: {
-          setA: {
-            startYear: rangeKeys[0].startYear,
-            endYear: rangeKeys[0].endYear,
-          },
-          setB: {
-            startYear: rangeKeys[1].startYear,
-            endYear: rangeKeys[1].endYear,
-          },
-          range: {
-            startYear: rangeKeys[0].startYear,
-            endYear: rangeKeys[1].endYear,
-          },
-        },
-        secondServer: {
-          setA: {
-            startYear: rangeKeys[2].startYear,
-            endYear: rangeKeys[2].endYear,
-          },
-          setB: {
-            startYear: rangeKeys[3].startYear,
-            endYear: rangeKeys[3].endYear,
-          },
-          range: {
-            startYear: rangeKeys[2].startYear,
-            endYear: rangeKeys[3].endYear,
-          },
-        },
-      };
+      metadata = buildMeta(rangeKeys);
       metadataTable = metadataDB();
       metadataTable.collection.insertOne(metadata, function (err, metadata) {
         if (err) {
@@ -169,14 +112,112 @@ async function asignServers() {
           console.log("Metadata inserted successfully");
         }
       });
+      tabletsToServers(metadata);
+
+      const ioMaster = require("socket.io")(master);
+      ioMaster.on("connection", (socket) => {
+        servers.push(socket);
+        console.log("A new server connected");
+        tabletsToServers(metadata);
+        socket.on("disconnect", () => {
+          // servers.pop(socket);
+        });
+      });
     })
     .catch((err) => {
       console.error(err);
     });
 }
-
-asignServers().then((res) => {
-  connectSocket().then((res) => {
-    console.log("Done");
+asignServers()
+  .then((res) => {
+    console.log("Assigned!!");
+  })
+  .catch((err) => {
+    console.error(err);
   });
+
+master.listen(8080, () => {
+  console.log("Master: listening on *:8080");
 });
+// const balanceThreshold = 10;
+// async function balanceLoad() {
+//   if (
+//     Math.abs(servers[0].tabletsNumber - servers[1].tabletsNumber) >
+//     balanceThreshold
+//   ) {
+//     await asignServers();
+//     return false;
+//   }
+//   return true;
+// }
+
+// async function connectSocket() {
+//   let serverCount = 0;
+//   let servers = [
+//     {
+//       id: "",
+//       tabletsNumber: Math.floor(tablets.length / 2),
+//     },
+//     {
+//       id: "",
+//       tabletsNumber: Math.floor(tablets.length / 2),
+//     },
+//   ];
+
+//   io.on("connection", (socket) => {
+//     socket.on("get-meta", (msg) => {
+//       socket.emit("send-meta", metadata);
+//     });
+
+//     socket.on("server-connect", (serverSocket) => {
+//       servers[serverCount].id = socket.id;
+//       socket.emit(
+//         "send-data",
+//         tablets.slice(
+//           serverCount * Math.floor(tablets.length / 2),
+//           (serverCount + 1) * Math.floor(tablets.length / 2)
+//         )
+//       );
+//       serverCount++;
+//     });
+
+//     socket.on("confirm-load", async (tabletsNumber) => {
+//       if (servers[0].id == socket.id) {
+//         servers[0].tabletsNumber = tabletsNumber;
+//       } else {
+//         servers[1].tabletsNumber = tabletsNumber;
+//       }
+
+//       let balanced = await balanceLoad();
+//       if (!balanced) {
+//         socket.emit("update-meta", metadata);
+//         socket.emit("update-data");
+//       }
+//     });
+
+//     socket.on("update-data", (socketServer) => {
+//       if (servers[0].id == socket.id) {
+//         socket.emit(
+//           "new-data",
+//           tablets.slice(0, Math.floor(tablets.length / 2))
+//         );
+//       } else {
+//         socket.emit(
+//           "new-data",
+//           tablets.slice(Math.floor(tablets.length / 2), tablets.length.legnth)
+//         );
+//       }
+//     });
+//   });
+// }
+
+// /*
+// 1. Responsible for dividing data tables into tablets.
+// 2. Responsible for assigning tablets to tablet servers
+// 3. Metadata table indicating the row key range (start key-end key) for each tablet server.
+// */
+// asignServers().then((res) => {
+//   connectSocket().then((res) => {
+//     console.log("Done");
+//   });
+// });
