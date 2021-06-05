@@ -6,6 +6,7 @@ const http = require("http");
 const server = http.createServer(app);
 const { Server } = require("socket.io");
 const { Socket } = require("dgram");
+const MovieModel = require('../Movie_model');
 const io = new Server(server);
 
 mongoose.connect(`${constants.connectionString}`, {
@@ -23,35 +24,6 @@ server.listen(3000, () => {
   console.log("Master: listening on *:3000");
 });
 
-function movieDB() {
-  const moviesSchema = new mongoose.Schema({
-    imdb_title_id: String,
-    title: String,
-    original_title: String,
-    year: String,
-    date_published: String,
-    genre: String,
-    duration: Number,
-    country: String,
-    language: String,
-    director: String,
-    writer: String,
-    production_company: String,
-    actors: String,
-    description: String,
-    avg_vote: Number,
-    votes: Number,
-    budget: String,
-    usa_gross_income: String,
-    worlwide_gross_income: String,
-    metascore: String,
-    reviews_from_users: Number,
-    reviews_from_critics: Number,
-  });
-
-  const Movie = mongoose.model("IMDbMovies", moviesSchema);
-  return Movie;
-}
 
 function metadataDB() {
   const metadataSchema = new mongoose.Schema({
@@ -83,7 +55,7 @@ async function divideTables(Movie) {
 }
 
 function asignServers() {
-  let Movie = movieDB();
+  let Movie = MovieModel;
   divideTables(Movie)
     .then((rangeKeys) => {
       const metadata = {
