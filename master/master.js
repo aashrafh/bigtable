@@ -7,6 +7,7 @@ const master = http.createServer(app);
 const { Server } = require("socket.io");
 const MovieModel = require("../Movie_model");
 const io = new Server(master);
+const fs = require('fs');
 
 let metadata = {};
 let tablets = [];
@@ -19,7 +20,7 @@ mongoose.connect(`${constants.connectionString}`, {
 const db = mongoose.connection;
 db.on("error", console.error.bind(console, "connection error:"));
 db.once("open", function () {
-  console.log("You'r connected!");
+  console.log("You're connected!");
 });
 
 master.listen(8080, () => {
@@ -42,31 +43,36 @@ async function balanceLoad() {
     Math.abs(servers[0].tabletsNumber - servers[1].tabletsNumber) >
     balanceThreshold
   ) {
-    await asignServers();
+    console.log('unbalance detected');
+    await assignServers();
     return false;
   }
   return true;
 }
 
-async function connectSocket() {
-  let serverCount = 0;
-  let servers = [
-    {
-      id: "",
-      tabletsNumber: Math.floor(tablets.length / 2),
-    },
-    {
-      id: "",
-      tabletsNumber: Math.floor(tablets.length / 2),
-    },
-  ];
+let serverCount = 0;
+let servers = [
+  {
+    id: "",
+    tabletsNumber: Math.floor(tablets.length / 2),
+  },
+  {
+    id: "",
+    tabletsNumber: Math.floor(tablets.length / 2),
+  },
+];
+io.on("connection", (socket) => {
 
-  io.on("connection", (socket) => {
-    socket.on("get-meta", (msg) => {
-      socket.emit("send-meta", metadata);
-    });
 
-    socket.on("server-connect", (serverSocket) => {
+  socket.on("get-meta", (msg) => {
+    socket.emit("send-meta", metadata);
+  });
+  
+
+
+  socket.on("server-connect", () => {
+    if (tablets.length != 0)
+    { 
       servers[serverCount].id = socket.id;
       socket.emit(
         "send-data",
@@ -76,37 +82,62 @@ async function connectSocket() {
         )
       );
       serverCount++;
-    });
-
-    socket.on("confirm-load", async (tabletsNumber) => {
-      if (servers[0].id == socket.id) {
-        servers[0].tabletsNumber = tabletsNumber;
-      } else {
-        servers[1].tabletsNumber = tabletsNumber;
-      }
-
-      let balanced = await balanceLoad();
-      if (!balanced) {
-        socket.emit("update-meta", metadata);
-        socket.emit("update-data");
-      }
-    });
-
-    socket.on("update-data", (socketServer) => {
-      if (servers[0].id == socket.id) {
-        socket.emit(
-          "new-data",
-          tablets.slice(0, Math.floor(tablets.length / 2))
-        );
-      } else {
-        socket.emit(
-          "new-data",
-          tablets.slice(Math.floor(tablets.length / 2), tablets.length.legnth)
-        );
-      }
-    });
+    }
+    else 
+      socket.emit ('reconnect');
   });
-}
+
+
+
+  socket.on("confirm-load", async (tabletsNumber) => {
+    if (servers[0].id == socket.id) {
+      servers[0].tabletsNumber = tabletsNumber;
+    } else {
+      servers[1].tabletsNumber = tabletsNumber;
+    }
+
+    let balanced = await balanceLoad();
+    if (!balanced) {
+      socket.emit("update-meta", metadata);
+      socket.emit("update-data");
+    }
+  });
+
+
+
+  socket.on("update-data", (socketServer) => {
+    if (servers[0].id == socket.id) {
+      socket.emit(
+        "new-data",
+        tablets.slice(0, Math.floor(tablets.length / 2))
+      );
+    } else {
+      socket.emit(
+        "new-data",
+        tablets.slice(Math.floor(tablets.length / 2), tablets.length)
+      );
+    }
+  });
+
+  socket.on('operation',(status,type,movies,cells) => {
+    let content = `The operation ${type} has ` +  ((status == 'unsuccessfully' )? `not` : '')  + `been done to the following movies :\n`;
+    if (Array.isArray(movies))
+      movies.forEach(movie => {
+        content += `\t the movie number ${movies.indexOf(movie)} is ${movie.title} and the year is ${movie.year} \n`;
+      });
+    else 
+      content += `\t the movie ${movies} and the year is ${movies} \n`
+    const today = new Date();
+    const date = today.getFullYear()+'-'+(today.getMonth()+1)+'-'+today.getDate();
+    const time = today.getHours() + ":" + today.getMinutes() + ":" + today.getSeconds();
+    const dateTime = date+' '+time;
+    content += `at timestamp ${dateTime}`;
+    fs.appendFile('logFile.log',content,(err)=>{ if(err) console.log(err)});
+
+  });
+
+  
+});
 
 /* 
 1. Responsible for dividing data tables into tablets.
@@ -127,7 +158,8 @@ async function divideTables(Movie) {
   return rangeKeys;
 }
 
-async function asignServers() {
+
+async function assignServers() {
   let Movie = MovieModel;
   divideTables(Movie)
     .then((rangeKeys) => {
@@ -175,8 +207,6 @@ async function asignServers() {
     });
 }
 
-asignServers().then((res) => {
-  connectSocket().then((res) => {
-    console.log("Done");
-  });
+assignServers().then((res) => {
+    console.log("Done reading and dividing data");
 });
