@@ -1,43 +1,33 @@
 const io = require('socket.io-client')
 const socket = io('http://localhost:4000/',{reconnect : true});
+const MovieModel = require('./Movie_model');
 let metaData = {}
-let block = 0;
 
-const operation = 'Set'
-const message = {
-    name : 'Marvel End Game'
-}
+const operation = 'ReadRows'
+const movie = {title : 'Split'};
+const cells = {'year' : 0};
 // Add a connect listener
 socket.on('connect',() => { 
     console.log('Connected!');
 });
 
-socket.on('block', (message) => { 
-    // block the client till a unblock comes
-    console.log('block');
-    block = 1;
-});
-
-socket.on('unblock', (message) => { 
-    // block the client till a unblock comes 
-    console.log('unblock');
-    block = 0;
-});
 
 socket.on('metaData',(metaData) => { // this for receiving the meta data from the master upon connection or upon update
     metaData = this.metaData
 })
 
 //set of queries to be sent
-while (block); // blocking condition
-socket.emit(operation, message); // send a set request
+socket.emit(operation, movie,cells); // send a read request
 
+socket.on('successful',(message)=>{
+    console.log(`the ${message} operation has been done successfully`);
+});
 
-
-
-socket.on('read' , (message) => {
-    console.log(`movie received and it's name is ${message.name}`);
-})
+socket.on('read' , (movies) => {
+    movies.forEach(movie => {
+        console.log(`the movie number ${movies.indexOf(movie)} is ${movie.title} and the year is ${movie.year}`);
+    });
+});
 
 
 socket.on("disconnect", () => {
