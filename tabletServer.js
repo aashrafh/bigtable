@@ -11,14 +11,23 @@ const MovieModel = require("./Movie_model");
 const ioClient = require("socket.io-client");
 const socketClient = ioClient("http://localhost:8080/", { reconnect: true });
 
+let serverTablets = [];
+
 mongoose.connect(`${constants.connectionString}`, {
   useNewUrlParser: true,
   useUnifiedTopology: true,
 });
 
-socketClient.on("connect", () => {
-  console.log("Connected with the master successfully");
-  socketClient.emit("")
+// socketClient.on("connect", () => {
+//   console.log("Connected with the master successfully");
+//   socketClient.emit("server-connect");
+// });
+
+socketClient.emit("server-connect");
+
+socketClient.on("send-data", (tablets) => {
+  serverTablets = tablets;
+  console.log(serverTablets);
 });
 
 const readRows = async (movie) => {

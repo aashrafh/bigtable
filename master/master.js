@@ -36,13 +36,85 @@ function metadataDB() {
   return Metadata;
 }
 
+const balanceThreshold = 10;
+async function balanceLoad() {
+  if (
+    Math.abs(servers[0].tabletsNumber - servers[1].tabletsNumber) >
+    balanceThreshold
+  ) {
+    await asignServers();
+    return false;
+  }
+  return true;
+}
+
+async function connectSocket() {
+  let serverCount = 0;
+  let servers = [
+    {
+      id: "",
+      tabletsNumber: Math.floor(tablets.length / 2),
+    },
+    {
+      id: "",
+      tabletsNumber: Math.floor(tablets.length / 2),
+    },
+  ];
+
+  io.on("connection", (socket) => {
+    socket.on("get-meta", (msg) => {
+      socket.emit("send-meta", metadata);
+    });
+
+    socket.on("server-connect", (serverSocket) => {
+      servers[serverCount].id = socket.id;
+      socket.emit(
+        "send-data",
+        tablets.slice(
+          serverCount * Math.floor(tablets.length / 2),
+          (serverCount + 1) * Math.floor(tablets.length / 2)
+        )
+      );
+      serverCount++;
+    });
+
+    socket.on("confirm-load", async (tabletsNumber) => {
+      if (servers[0].id == socket.id) {
+        servers[0].tabletsNumber = tabletsNumber;
+      } else {
+        servers[1].tabletsNumber = tabletsNumber;
+      }
+
+      let balanced = await balanceLoad();
+      if (!balanced) {
+        socket.emit("update-meta", metadata);
+        socket.emit("update-data");
+      }
+    });
+
+    socket.on("update-data", (socketServer) => {
+      if (servers[0].id == socket.id) {
+        socket.emit(
+          "new-data",
+          tablets.slice(0, Math.floor(tablets.length / 2))
+        );
+      } else {
+        socket.emit(
+          "new-data",
+          tablets.slice(Math.floor(tablets.length / 2), tablets.length.legnth)
+        );
+      }
+    });
+  });
+}
+
 /* 
 1. Responsible for dividing data tables into tablets.
 2. Responsible for assigning tablets to tablet servers 
 3. Metadata table indicating the row key range (start key-end key) for each tablet server.
 */
 async function divideTables(Movie) {
-  tablets = await Movie.find({}).sort({ year: 1 });
+  tablets = await Movie.find({}).sort({ year: 1 }).limit(100);
 
   const tabletSize = Math.floor(tablets.length / 4);
   let rangeKeys = [];
@@ -55,7 +127,7 @@ async function divideTables(Movie) {
   return rangeKeys;
 }
 
-function asignServers() {
+async function asignServers() {
   let Movie = MovieModel;
   divideTables(Movie)
     .then((rangeKeys) => {
@@ -102,70 +174,9 @@ function asignServers() {
       console.error(err);
     });
 }
-asignServers();
 
-let serverCount = 0;
-let servers = [
-  {
-    id: "",
-    tabletsNumber: Math.floor(tablets.length / 2),
-  },
-  {
-    id: "",
-    tabletsNumber: Math.floor(tablets.length / 2),
-  },
-];
-
-io.on("connection", (socket) => {
-  socket.on("get-meta", (msg) => {
-    socket.emit("send-meta", metadata);
-  });
-
-  socket.on("server-connect", (serverSocket) => {
-    servers[serverCount].id = socket.id;
-    socket.emit(
-      "send-data",
-      tablets.slice(
-        serverCount * Math.floor(tablets.length / 2),
-        (serverCount + 1) * Math.floor(tablets.length / 2)
-      )
-    );
-    serverCount++;
-  });
-
-  socket.on("confirm-load", (tabletsNumber) => {
-    if (servers[0].id == socket.id) {
-      servers[0].tabletsNumber = tabletsNumber;
-    } else {
-      servers[1].tabletsNumber = tabletsNumber;
-    }
-
-    if (!balanceLoad()) {
-      socket.emit("update-meta", metadata);
-      socket.emit("update-data");
-    }
-  });
-
-  socket.on("update-data", (socketServer) => {
-    if (servers[0].id == socket.id) {
-      socket.emit("new-data", tablets.slice(0, Math.floor(tablets.length / 2)));
-    } else {
-      socket.emit(
-        "new-data",
-        tablets.slice(Math.floor(tablets.length / 2), tablets.length.legnth)
-      );
-    }
+asignServers().then((res) => {
+  connectSocket().then((res) => {
+    console.log("Done");
   });
 });
-
-const balanceThreshold = 10;
-function balanceLoad() {
-  if (
-    Math.abs(servers[0].tabletsNumber - servers[1].tabletsNumber) >
-    balanceThreshold
-  ) {
-    asignServers();
-    return false;
-  }
-  return true;
-}
