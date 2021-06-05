@@ -11,6 +11,8 @@ const MovieModel = require("./Movie_model");
 const ioClient = require("socket.io-client");
 const socketClient = ioClient("http://localhost:8080/", { reconnect: true });
 
+
+//master server side
 let serverTablets = [];
 
 mongoose.connect(`${constants.connectionString}`, {
@@ -18,18 +20,24 @@ mongoose.connect(`${constants.connectionString}`, {
   useUnifiedTopology: true,
 });
 
-// socketClient.on("connect", () => {
-//   console.log("Connected with the master successfully");
-//   socketClient.emit("server-connect");
-// });
+socketClient.on("connect", () => {
+  console.log("Connected with the master successfully");
+  socketClient.emit("server-connect");
+});
 
-socketClient.emit("server-connect");
+socketClient.on('reconnect' , () => {
+    socketClient.emit("server-connect");
+});
 
 socketClient.on("send-data", (tablets) => {
   serverTablets = tablets;
   console.log(serverTablets);
 });
 
+
+
+
+//client server side
 const readRows = async (movie) => {
   return await MovieModel.find({ title: movie.title }).sort({ year: 1 });
 };
@@ -60,54 +68,101 @@ const setRow = async (movie) => {
 
 io.on("connection", (socket) => {
   console.log("new user connected");
-  // listen for message from user
+
+
   socket.on("Set", async (Movie) => {
     console.log(`set operation`);
-    // lock the server
     const movie = await setRow(Movie);
-
-    if (movie !== null) socket.emit("successful", "Set Row");
-    else socket.emit("unsuccessful", "Set Row");
+    if (movie !== null)
+    {
+        socket.emit("successful", "Set Rows");  
+        socketClient.emit("operation" ,'successfully' , 'Set Cells' ,movie);
+    } 
+    else 
+    {
+        socket.emit("unsuccessful", "Set Rows");
+        socketClient.emit("operation" ,'unsuccessfully' , 'Set Cells' ,movie);
+    }
   });
+
+
 
   socket.on("AddRow", async (Movie) => {
     console.log(`add row operation`);
-    // connect to the db and add the row from it
     const movie = await addRow(Movie);
-    if (movie !== null) socket.emit("successful", "Add Row");
-    else socket.emit("unsuccessful", "Add Row");
+    if (movie !== null)
+    {
+        socket.emit("successful", "Add Row");  
+        socketClient.emit("operation" ,'successfully' , 'Add Row' ,movie);
+    } 
+    else 
+    {
+        socket.emit("unsuccessful", "Add Row");
+        socketClient.emit("operation" ,'unsuccessfully' , 'Add Row' ,movie);
+    }
   });
+
+
 
   socket.on("DeleteCells", async (Movie, Cells) => {
     console.log(`delete cells operation`);
-    // connect to the db and delete the cells from it
-    movie = await deleteCells(Movie, Cells);
-    if (movie !== null) socket.emit("successful", "delete Cells");
-    else socket.emit("unsuccessful", "delete Cells");
+    const movie = await deleteCells(Movie, Cells);
+    if (movie !== null)
+    {
+        socket.emit("successful", "delete Cells");  
+        socketClient.emit("operation" ,'successfully' , 'delete cells' ,movie,cells);
+    } 
+    else 
+    {
+        socket.emit("unsuccessful", "delete Cells");
+        socketClient.emit("operation" ,'unsuccessfully' , 'delete Cells' ,movie,cells);
+    }
   });
 
-  socket.on("DeleteRow", async (movie) => {
+
+
+  socket.on("DeleteRow", async (Movie) => {
     console.log(`delete row operation`);
-    // connect to the db and delete the row from it
-    movie = await deleteRows(movie);
-    if (movie !== null) socket.emit("successful", "delete Row");
-    else socket.emit("unsuccessful", "delete Row");
+    const movie = await deleteRows(Movie);
+    if (movie !== null)
+    {
+        socket.emit("successful", "delete Row");  
+        socketClient.emit("operation" ,'successfully' , 'delete Row' ,movie);
+    } 
+    else 
+    {
+        socket.emit("unsuccessful", "delete Row");
+        socketClient.emit("operation" ,'unsuccessfully' , 'delete Row' ,movie);
+    }
   });
 
-  socket.on("ReadRows", async (Message) => {
+
+
+  socket.on("ReadRows", async (Movie) => {
     console.log(`read rows operation`);
-    // read the movie from server
-    let movies = await readRows(Message);
+    const movies = await readRows(Movie);
+    //const movie = serverTablets[serverTablets.findIndex((tablet) => { return tablet.title == Movie.title })];
     if (movies !== null)
-      //send it back to the client
-      socket.emit("read", movies);
-    else socket.emit("unsuccessful", "Read Rows");
+    {
+        socket.emit("successful", "Read Row");  
+        socket.emit('read', movies);
+        socketClient.emit("operation" ,'successfully' , 'Read Row' ,movies);
+
+    } 
+    else 
+    {
+        socket.emit("unsuccessful", "Read Row");
+        socketClient.emit("operation" ,'unsuccessfully' , 'Read Row' ,movies);
+    }
   });
 
-  // when server disconnects from user
+
+
   socket.on("disconnect", () => {
     console.log("disconnected from user");
   });
+
+
 });
 
 port = 4000;
