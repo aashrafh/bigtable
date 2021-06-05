@@ -10,7 +10,6 @@ const io = new Server(master);
 
 let metadata = {};
 let tablets = [];
-let tabletsCount = 30000;
 
 mongoose.connect(`${constants.connectionString}`, {
   useNewUrlParser: true,
@@ -43,7 +42,7 @@ function metadataDB() {
 3. Metadata table indicating the row key range (start key-end key) for each tablet server.
 */
 async function divideTables(Movie) {
-  tablets = await Movie.find({}).sort({ year: 1 }).limit(tabletsCount);
+  tablets = await Movie.find({}).sort({ year: 1 });
 
   const tabletSize = Math.floor(tablets.length / 4);
   let rangeKeys = [];
@@ -109,11 +108,11 @@ let serverCount = 0;
 let servers = [
   {
     id: "",
-    tabletsNumber: Math.floor(tabletsCount / 2),
+    tabletsNumber: Math.floor(tablets.length / 2),
   },
   {
     id: "",
-    tabletsNumber: Math.floor(tabletsCount / 2),
+    tabletsNumber: Math.floor(tablets.length / 2),
   },
 ];
 
@@ -127,8 +126,8 @@ io.on("connection", (socket) => {
     socket.emit(
       "send-data",
       tablets.slice(
-        serverCount * Math.floor(tabletsCount / 2),
-        (serverCount + 1) * Math.floor(tabletsCount / 2)
+        serverCount * Math.floor(tablets.length / 2),
+        (serverCount + 1) * Math.floor(tablets.length / 2)
       )
     );
     serverCount++;
@@ -149,16 +148,24 @@ io.on("connection", (socket) => {
 
   socket.on("update-data", (socketServer) => {
     if (servers[0].id == socket.id) {
-      socket.emit("new-data", tablets.slice(0, Math.floor(tabletsCount / 2)));
+      socket.emit("new-data", tablets.slice(0, Math.floor(tablets.length / 2)));
     } else {
       socket.emit(
         "new-data",
-        tablets.slice(Math.floor(tabletsCount / 2), tabletsCount.legnth)
+        tablets.slice(Math.floor(tablets.length / 2), tablets.length.legnth)
       );
     }
   });
 });
 
+const balanceThreshold = 10;
 function balanceLoad() {
-  
+  if (
+    Math.abs(servers[0].tabletsNumber - servers[1].tabletsNumber) >
+    balanceThreshold
+  ) {
+    asignServers();
+    return false;
+  }
+  return true;
 }
