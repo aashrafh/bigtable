@@ -6,11 +6,13 @@ const express = require("express");
 const app = express();
 const http = require("http");
 const master = http.createServer(app);
+const ioServer = require("socket.io");
 
 let metadata = {};
 let tablets = [];
 let servers = [];
-// let clients = [];
+let clients = [];
+let tabletServerCount = 0;
 
 mongoose.connect(`${constants.connectionString}`, {
   useNewUrlParser: true,
@@ -47,80 +49,137 @@ async function divideTables(Movie) {
   return rangeKeys;
 }
 
-// async function metaToClients(meta) {
-//   for (let i = 0; i < clients.length; i++) {
-//     clients[i].emit("send-meta", meta);
-//   }
-// }
+async function metaToClients(meta) {
+  for (let i = 0; i < clients.length; i++) {
+    clients[i].emit("send-meta", meta);
+  }
+}
 
 async function tabletsToServers(meta) {
   for (let i = 0; i < servers.length; i++) {
     servers[i].emit(
       "send-tablets",
-      tablets.slice(
-        i * Math.floor(tablets.length / 2),
-        (i + 1) * Math.floor(tablets.length / 2)
-      )
+      {
+        tablets: tablets.slice(
+          i * Math.floor(tablets.length / 2),
+          (i + 1) * Math.floor(tablets.length / 2)
+        ),
+        index = i
+      }
     );
     console.log("Emitting the tablets");
   }
 }
 
 function buildMeta(rangeKeys) {
-  return {
-    firstServer: {
-      setA: {
-        startYear: rangeKeys[0].startYear,
-        endYear: rangeKeys[0].endYear,
+  if (!tabletServerCount) return {};
+  else if (tabletServerCount === 1)
+    return {
+      firstServer: {
+        setA: {
+          startYear: rangeKeys[0].startYear,
+          endYear: rangeKeys[1].endYear,
+        },
+        setB: {
+          startYear: rangeKeys[2].startYear,
+          endYear: rangeKeys[3].endYear,
+        },
+        range: {
+          startYear: rangeKeys[0].startYear,
+          endYear: rangeKeys[3].endYear,
+        },
       },
-      setB: {
-        startYear: rangeKeys[1].startYear,
-        endYear: rangeKeys[1].endYear,
+    };
+  else
+    return {
+      firstServer: {
+        setA: {
+          startYear: rangeKeys[0].startYear,
+          endYear: rangeKeys[0].endYear,
+        },
+        setB: {
+          startYear: rangeKeys[1].startYear,
+          endYear: rangeKeys[1].endYear,
+        },
+        range: {
+          startYear: rangeKeys[0].startYear,
+          endYear: rangeKeys[1].endYear,
+        },
       },
-      range: {
-        startYear: rangeKeys[0].startYear,
-        endYear: rangeKeys[1].endYear,
+      secondServer: {
+        setA: {
+          startYear: rangeKeys[2].startYear,
+          endYear: rangeKeys[2].endYear,
+        },
+        setB: {
+          startYear: rangeKeys[3].startYear,
+          endYear: rangeKeys[3].endYear,
+        },
+        range: {
+          startYear: rangeKeys[2].startYear,
+          endYear: rangeKeys[3].endYear,
+        },
       },
-    },
-    secondServer: {
-      setA: {
-        startYear: rangeKeys[2].startYear,
-        endYear: rangeKeys[2].endYear,
-      },
-      setB: {
-        startYear: rangeKeys[3].startYear,
-        endYear: rangeKeys[3].endYear,
-      },
-      range: {
-        startYear: rangeKeys[2].startYear,
-        endYear: rangeKeys[3].endYear,
-      },
-    },
-  };
+    };
+}
+
+function send(meta) {
+  if (!tabletServerCount) metaToClients(meta);
+  else {
+    tabletsToServers(meta);
+    metaToClients(meta);
+  }
+}
+
+function processMeta(rangeKeys) {
+  metadata = buildMeta(rangeKeys);
+  metadataTable = metadataDB();
+  metadataTable.collection.insertOne(metadata, function (err, metadata) {
+    if (err) {
+      return console.error(err);
+    } else {
+      console.log("Metadata inserted successfully");
+    }
+  });
+}
+
+async function balanceLoad() {
+  const Movie = MovieModel;
+  divideTables(Movie).then((rangeKeys) => {
+    processMeta(rangeKeys);
+    send(metadata);
+  });
 }
 
 async function asignServers() {
   const Movie = MovieModel;
   divideTables(Movie)
     .then((rangeKeys) => {
-      metadata = buildMeta(rangeKeys);
-      metadataTable = metadataDB();
-      metadataTable.collection.insertOne(metadata, function (err, metadata) {
-        if (err) {
-          return console.error(err);
-        } else {
-          console.log("Metadata inserted successfully");
-        }
-      });
-      tabletsToServers(metadata);
+      processMeta(rangeKeys);
+      send(metadata);
 
-      const ioMaster = require("socket.io")(master);
+      const ioMaster = ioServer(master);
       ioMaster.on("connection", (socket) => {
         servers.push(socket);
-        console.log("A new server connected");
-        tabletsToServers(metadata);
+        console.log(
+          "Master: new server has attached with index: ",
+          tabletServerCount++
+        );
+
+        send(metadata);
+        balanceLoad();
+
+        socket.on("serverWrite", () => {
+          balanceLoad();
+        });
+
         socket.on("disconnect", () => {
-          // servers.pop(socket);
+          servers = servers.filter(
+            (tabletServer) => tabletServer.id !== socket.id
+          );
+          tabletServerCount--;
+          console.log("Master: a server has disconnected, re-balancing...");
+          balanceLoad();
         });
       });
     })
@@ -128,6 +187,7 @@ async function asignServers() {
       console.error(err);
     });
 }
+
 asignServers()
   .then((res) => {
     console.log("Assigned!!");
