@@ -31,7 +31,7 @@ db.once("open", function () {
 });
 
 async function divideTables(Movie) {
-  tablets = await Movie.find({}).sort({ year: 1 }).limit(100);
+  tablets = await Movie.find({}).sort({ year: 1 });
 
   const tabletSize = Math.floor(tablets.length / 4);
   let rangeKeys = [];
@@ -158,7 +158,9 @@ async function balanceLoad() {
 function handleLogging() {
   for (socket of servers) {
     socket.on("operation", (status, type, index) => {
-      let content = `The operation of ${type} has  +  ((status == 'unsuccessfully' )? not : '')  + been done\n`;
+      let content = `The operation of ${type} has ${
+        status == "unsuccessfully" ? not : ""
+      } been done`;
 
       const today = new Date();
       const date =
@@ -170,7 +172,7 @@ function handleLogging() {
       const time =
         today.getHours() + ":" + today.getMinutes() + ":" + today.getSeconds();
       const dateTime = date + " " + time;
-      content += `at timestamp ${dateTime}\n`;
+      content += ` at timestamp ${dateTime}\n`;
       fs.appendFile("logFile.log", content, (err) => {
         if (err) console.log(err);
       });
@@ -202,7 +204,7 @@ async function asignServers() {
           tabletServerCount++
         );
 
-        // send(metadata);
+        send(metadata);
         balanceLoad();
 
         // socket.on("serverWrite", () => {
@@ -217,6 +219,7 @@ async function asignServers() {
           tabletServerCount--;
           console.log("Master: a server has disconnected, re-balancing...");
           balanceLoad();
+          send(metadata);
         });
       });
     })
