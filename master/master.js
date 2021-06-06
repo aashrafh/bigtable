@@ -51,14 +51,14 @@ async function divideTables(Movie) {
 
 async function metaToClients(meta) {
   for (let i = 0; i < clients.length; i++) {
-    clients[i].emit("send-meta", meta);
+    clients[i].emit("sendMeta", meta);
   }
 }
 
 async function tabletsToServers(meta) {
   for (let i = 0; i < servers.length; i++) {
     servers[i].emit(
-      "send-tablets",
+      "sendTablets",
       {
         tablets: tablets.slice(
           i * Math.floor(tablets.length / 2),
@@ -88,6 +88,7 @@ function buildMeta(rangeKeys) {
           startYear: rangeKeys[0].startYear,
           endYear: rangeKeys[3].endYear,
         },
+        port: 3000
       },
     };
   else
@@ -105,6 +106,7 @@ function buildMeta(rangeKeys) {
           startYear: rangeKeys[0].startYear,
           endYear: rangeKeys[1].endYear,
         },
+        port: 3000
       },
       secondServer: {
         setA: {
@@ -119,6 +121,7 @@ function buildMeta(rangeKeys) {
           startYear: rangeKeys[2].startYear,
           endYear: rangeKeys[3].endYear,
         },
+        port: 4000
       },
     };
 }

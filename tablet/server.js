@@ -135,7 +135,7 @@ function connectToMaster() {
   const masterSocket = ioClient(masterURL);
   masterSocket.on("connect", () => {
     console.log("Connected to the master");
-    masterSocket.on("send-tablets", (res) => {
+    masterSocket.on("sendTablets", (res) => {
       tablets = res.tablets;
       if (res.index == 1) port = 4000;
       console.log("Recieved number of tablets = ", tablets.length);
