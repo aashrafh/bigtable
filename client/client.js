@@ -1,4 +1,5 @@
 const ioClient = require("socket.io-client");
+const { secondTestcase } = require("./testcases");
 
 const masterURL = "http://localhost:8000";
 
@@ -13,7 +14,7 @@ function connectToMaster() {
     masterSocket.on("sendMeta", (meta) => {
       metadata = meta;
       console.log("Client: Successfully recieved metadata", metadata);
-      if (metadata !== {}) {
+      if (metadata) {
         const operation = "ReadRows";
         const movie = { title: "Split", year: "2016" };
         const serverSocket = connectToServer(movie);
@@ -39,3 +40,15 @@ function connectToServer({ year }) {
 }
 
 connectToMaster();
+
+function clientTest2(index) {
+  const { operations, movies } = secondTestcase;
+  // while(index < operations.length){
+  //   let query = {
+  //     operation: operations[index],
+  //     movie: movies[index]
+  //   };
+  //   yield query;
+  //   index++;
+  // }
+}
