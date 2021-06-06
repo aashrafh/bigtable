@@ -188,9 +188,21 @@ async function asignServers() {
     });
 }
 
+function connectToClient(){
+  const clientServer = http.createServer(app);
+  const clientSocket = ioServer(clientServer);
+  clientSocket.on('connection', socket => {
+    clients.push(socket);
+    console.log('Master: a new client has connected successfully');
+    socket.emit('sendMeta', metadata);
+  })
+}
+
 asignServers()
   .then((res) => {
     console.log("Assigned!!");
+    connectToClient();
+    console.log("Connected to Clients!!");
   })
   .catch((err) => {
     console.error(err);
