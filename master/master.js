@@ -1,6 +1,7 @@
 const mongoose = require("mongoose");
 const constants = require("../scripts/constants");
 const MovieModel = require("../Movie_model");
+const MetadataModel = require("../metadataModel");
 
 const express = require("express");
 const app = express();
@@ -25,16 +26,6 @@ db.once("open", function () {
   console.log("You'r connected to the database!");
 });
 
-function metadataDB() {
-  const metadataSchema = new mongoose.Schema({
-    firstServer: Object,
-    secondServer: Object,
-  });
-
-  const Metadata = mongoose.model("metadata", metadataSchema);
-  return Metadata;
-}
-
 async function divideTables(Movie) {
   tablets = await Movie.find({}).sort({ year: 1 }).limit(100);
 
@@ -57,16 +48,13 @@ async function metaToClients(meta) {
 
 async function tabletsToServers(meta) {
   for (let i = 0; i < servers.length; i++) {
-    servers[i].emit(
-      "sendTablets",
-      {
-        tablets: tablets.slice(
-          i * Math.floor(tablets.length / 2),
-          (i + 1) * Math.floor(tablets.length / 2)
-        ),
-        index = i
-      }
-    );
+    servers[i].emit("sendTablets", {
+      tablets: tablets.slice(
+        i * Math.floor(tablets.length / 2),
+        (i + 1) * Math.floor(tablets.length / 2)
+      ),
+      index: i,
+    });
     console.log("Emitting the tablets");
   }
 }
@@ -88,7 +76,7 @@ function buildMeta(rangeKeys) {
           startYear: rangeKeys[0].startYear,
           endYear: rangeKeys[3].endYear,
         },
-        port: 3000
+        port: 3000,
       },
     };
   else
@@ -106,7 +94,7 @@ function buildMeta(rangeKeys) {
           startYear: rangeKeys[0].startYear,
           endYear: rangeKeys[1].endYear,
         },
-        port: 3000
+        port: 3000,
       },
       secondServer: {
         setA: {
@@ -121,7 +109,7 @@ function buildMeta(rangeKeys) {
           startYear: rangeKeys[2].startYear,
           endYear: rangeKeys[3].endYear,
         },
-        port: 4000
+        port: 4000,
       },
     };
 }
@@ -136,7 +124,7 @@ function send(meta) {
 
 function processMeta(rangeKeys) {
   metadata = buildMeta(rangeKeys);
-  metadataTable = metadataDB();
+  metadataTable = MetadataModel;
   metadataTable.collection.insertOne(metadata, function (err, metadata) {
     if (err) {
       return console.error(err);
@@ -191,14 +179,14 @@ async function asignServers() {
     });
 }
 
-function connectToClient(){
+function connectToClient() {
   const clientServer = http.createServer(app);
   const clientSocket = ioServer(clientServer);
-  clientSocket.on('connection', socket => {
+  clientSocket.on("connection", (socket) => {
     clients.push(socket);
-    console.log('Master: a new client has connected successfully');
-    socket.emit('sendMeta', metadata);
-  })
+    console.log("Master: a new client has connected successfully");
+    socket.emit("sendMeta", metadata);
+  });
 }
 
 asignServers()

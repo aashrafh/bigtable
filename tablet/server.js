@@ -4,8 +4,8 @@ const http = require("http");
 const tabletServer = http.createServer(app);
 
 const mongoose = require("mongoose");
-const MovieModel = require("./Movie_model");
-const constants = require("./scripts/constants");
+const MovieModel = require("../Movie_model");
+const constants = require("../scripts/constants");
 
 const masterURL = "http://localhost:8080";
 const ioClient = require("socket.io-client");
@@ -49,6 +49,8 @@ const setRow = async (movie) => {
 };
 
 function connectToClient() {
+  if (tabletServer.listening) tabletServer.close();
+
   tabletServer.listen(port, () => {
     console.log("Tablet server has started for client connections");
 
@@ -149,3 +151,4 @@ connectToMaster();
 
 // 1- When to emit 'serverWrite' event ?
 // 2- We need to lock server operations
+// 3- Modify the operations to be based on year as a row key
