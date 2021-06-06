@@ -16,7 +16,7 @@ let metadata = {};
 let tablets = [];
 let servers = [];
 let clients = [];
-let serverCounts = [];
+let serverCounts = [0, 0];
 let tabletServerCount = 0;
 
 mongoose.connect(`${constants.connectionString}`, {
@@ -43,9 +43,8 @@ async function divideTables(Movie) {
       endYear: tablets[(i + 1) * tabletSize - 1]["year"],
     });
   }
-  serverCounts = [];
-  serverCounts.push(Math.floor(tablets.length / 2));
-  serverCounts.push(Math.floor(tablets.length / 2));
+  serverCounts[0] = Math.floor(tablets.length / 2);
+  serverCounts[1] = Math.floor(tablets.length / 2) + (tablets.length % 2);
   return rangeKeys;
 }
 
@@ -153,29 +152,31 @@ function processMeta(rangeKeys) {
 }
 
 async function balanceLoad() {
-  console.log("Server1 Count", serverCounts[0]);
-  console.log("Server2 Count", serverCounts[1]);
+  // console.log("Server1 Count", serverCounts[0]);
+  // console.log("Server2 Count", serverCounts[1]);
   if (Math.abs(serverCounts[0] - serverCounts[1]) > 10) {
     const Movie = MovieModel;
     divideTables(Movie).then((rangeKeys) => {
       processMeta(rangeKeys);
       updateMeta(metadata);
-    });
-    let content = `Re-balanced the tablets division and updated the metadata\n`;
-    fs.appendFile("logFile.log", content, (err) => {
-      if (err) console.log(err);
+      let content = `Re-balanced the tablets division and updated the metadata\n`;
+      fs.appendFile("logFile.log", content, (err) => {
+        if (err) console.log(err);
+      });
+
+      console.log("Balance Load has done successfully...");
     });
 
-    // serverCounts[0] = serverCounts[1] = Math.floor(
-    //   (serverCounts[0] + serverCounts[1]) / 2
-    // );
-    console.log("Balance Load has done successfully...");
+    serverCounts[0] = Math.floor((serverCounts[0] + serverCounts[1]) / 2);
+    serverCounts[1] =
+      Math.floor((serverCounts[0] + serverCounts[1]) / 2) +
+      ((serverCounts[0] + serverCounts[1]) % 2);
   }
 }
 
-function handleLogging() {
+async function handleLogging() {
   for (socket of servers) {
-    socket.on("operation", (status, type, index) => {
+    socket.on("operation", async (status, type, index) => {
       let content = `The operation of ${type} has ${
         status == "unsuccessfully" ? not : ""
       } been done`;
@@ -203,10 +204,10 @@ function handleLogging() {
 
       if (type === "Add Row") {
         serverCounts[index]++;
-        balanceLoad();
+        await balanceLoad();
       } else if (type === "delete Row") {
         serverCounts[index]--;
-        balanceLoad();
+        await balanceLoad();
       }
     });
   }
@@ -219,7 +220,7 @@ async function asignServers() {
       send(metadata);
 
       const ioMaster = ioServer(master);
-      ioMaster.on("connection", (socket) => {
+      ioMaster.on("connection", async (socket) => {
         processMeta(rangeKeys);
         // console.log("Some server/client are trying to connect...");
         servers.push(socket);
@@ -229,20 +230,20 @@ async function asignServers() {
         );
 
         send(metadata);
-        balanceLoad();
+        await balanceLoad();
 
         // socket.on("serverWrite", () => {
         //   balanceLoad();
         // });
-        handleLogging();
+        await handleLogging();
 
-        socket.on("disconnect", () => {
+        socket.on("disconnect", async () => {
           servers = servers.filter(
             (tabletServer) => tabletServer.id !== socket.id
           );
           tabletServerCount--;
           console.log("Master: a server has disconnected, re-balancing...");
-          balanceLoad();
+          await balanceLoad();
           send(metadata);
         });
       });
