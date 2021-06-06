@@ -31,9 +31,11 @@ db.once("open", function () {
 });
 
 async function divideTables(Movie) {
-  tablets = await Movie.find({}).sort({ year: 1 });
+  tablets = await Movie.find({}).sort({ year: 1 }).limit(100);
 
   const tabletSize = Math.floor(tablets.length / 4);
+  console.log("Total docs in the database = ", tabletSize * 4);
+
   let rangeKeys = [];
   for (let i = 0; i < 4; i++) {
     rangeKeys.push({
@@ -41,20 +43,21 @@ async function divideTables(Movie) {
       endYear: tablets[(i + 1) * tabletSize - 1]["year"],
     });
   }
+  serverCounts = [];
   serverCounts.push(Math.floor(tablets.length / 2));
   serverCounts.push(Math.floor(tablets.length / 2));
   return rangeKeys;
 }
 
-async function metaToClients(meta) {
+async function metaToClients(meta, eventName) {
   for (let i = 0; i < clients.length; i++) {
-    clients[i].emit("sendMeta", meta);
+    clients[i].emit(eventName, meta);
   }
 }
 
-async function tabletsToServers(meta) {
+async function tabletsToServers(meta, eventName) {
   for (let i = 0; i < servers.length; i++) {
-    servers[i].emit("sendTablets", {
+    servers[i].emit(eventName, {
       tablets: tablets.slice(
         i * Math.floor(tablets.length / 2),
         (i + 1) * Math.floor(tablets.length / 2)
@@ -121,10 +124,18 @@ function buildMeta(rangeKeys) {
 }
 
 function send(meta) {
-  if (!tabletServerCount) metaToClients(meta);
+  if (!tabletServerCount) metaToClients(meta, "sendMeta");
   else {
-    tabletsToServers(meta);
-    metaToClients(meta);
+    tabletsToServers(meta, "sendTablets");
+    metaToClients(meta, "sendMeta");
+  }
+}
+
+function updateMeta(meta) {
+  if (!tabletServerCount) metaToClients(meta, "updateMeta");
+  else {
+    tabletsToServers(meta, "sendTablets");
+    metaToClients(meta, "updateMeta");
   }
 }
 
@@ -142,16 +153,23 @@ function processMeta(rangeKeys) {
 }
 
 async function balanceLoad() {
+  console.log("Server1 Count", serverCounts[0]);
+  console.log("Server2 Count", serverCounts[1]);
   if (Math.abs(serverCounts[0] - serverCounts[1]) > 10) {
     const Movie = MovieModel;
     divideTables(Movie).then((rangeKeys) => {
       processMeta(rangeKeys);
-      send(metadata);
+      updateMeta(metadata);
     });
     let content = `Re-balanced the tablets division and updated the metadata\n`;
     fs.appendFile("logFile.log", content, (err) => {
       if (err) console.log(err);
     });
+
+    // serverCounts[0] = serverCounts[1] = Math.floor(
+    //   (serverCounts[0] + serverCounts[1]) / 2
+    // );
+    console.log("Balance Load has done successfully...");
   }
 }
 
@@ -170,7 +188,13 @@ function handleLogging() {
         "-" +
         today.getDate();
       const time =
-        today.getHours() + ":" + today.getMinutes() + ":" + today.getSeconds();
+        today.getHours() +
+        ":" +
+        today.getMinutes() +
+        ":" +
+        today.getSeconds() +
+        ":" +
+        today.getMilliseconds();
       const dateTime = date + " " + time;
       content += ` at timestamp ${dateTime}\n`;
       fs.appendFile("logFile.log", content, (err) => {

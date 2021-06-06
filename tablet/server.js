@@ -64,6 +64,7 @@ function connectToClient() {
         if (movie !== null) {
           socket.emit("successful", "Set Rows");
           master.emit("operation", "successfully", "Set Cells", serverIndex);
+          console.log("Successfull Set: ", movie);
         } else {
           socket.emit("unsuccessful", "Set Rows");
           master.emit("operation", "unsuccessfully", "Set Cells", serverIndex);
@@ -76,6 +77,7 @@ function connectToClient() {
         if (movie !== null) {
           socket.emit("successful", "Add Row");
           master.emit("operation", "successfully", "Add Row", serverIndex);
+          console.log("Successfull AddRow: ", movie);
         } else {
           socket.emit("unsuccessful", "Add Row");
           master.emit("operation", "unsuccessfully", "Add Row", serverIndex);
@@ -88,6 +90,7 @@ function connectToClient() {
         if (movie !== null) {
           socket.emit("successful", "delete Cells");
           master.emit("operation", "successfully", "delete cells", serverIndex);
+          console.log("Successfull DeleteCells: ", movie);
         } else {
           socket.emit("unsuccessful", "delete Cells");
           master.emit(
@@ -105,6 +108,7 @@ function connectToClient() {
         if (movie !== null) {
           socket.emit("successful", "delete Row");
           master.emit("operation", "successfully", "delete Row", serverIndex);
+          console.log("Successfull DeleteRow: ", movie);
         } else {
           socket.emit("unsuccessful", "delete Row");
           master.emit("operation", "unsuccessfully", "delete Row", serverIndex);
@@ -113,12 +117,13 @@ function connectToClient() {
 
       socket.on("ReadRows", async (Movie) => {
         console.log(`read rows operation`);
-        const movies = await readRows(Movie);
+        const movie = await readRows(Movie);
         //const movie = serverTablets[serverTablets.findIndex((tablet) => { return tablet.title == Movie.title })];
-        if (movies !== null) {
+        if (movie !== null) {
           socket.emit("successful", "Read Row");
-          socket.emit("read", movies);
+          // socket.emit("read", movies);
           master.emit("operation", "successfully", "Read Row", serverIndex);
+          console.log("Successfull ReadRows: ", movie);
         } else {
           socket.emit("unsuccessful", "Read Row");
           master.emit("operation", "unsuccessfully", "Read Row", serverIndex);

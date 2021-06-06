@@ -13,7 +13,10 @@ db.once("open", function () {
   console.log("You'r connected!");
 });
 
-MovieModel.collection.deleteMany({ year: { $lt: "2010" } }, function (err) {
-  if (err) return console.error(err);
-  else console.log("Deleted successfully");
-});
+MovieModel.collection.deleteMany(
+  { avg_vote: { $lt: 6.5 } },
+  function (err, cnt) {
+    if (err) return console.error(err);
+    else console.log(cnt);
+  }
+);

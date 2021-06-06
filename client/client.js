@@ -15,12 +15,18 @@ function connectToMaster() {
       metadata = meta;
       console.log("Client: Successfully recieved metadata", metadata);
       if (metadata) {
-        const operation = "ReadRows";
-        const movie = { title: "Split", year: "2016" };
-        const serverSocket = connectToServer(movie);
+        const secondCaseTester = clientTest2(0);
+        for (let i = 0; i < 17; i++) {
+          const { operation, movie } = secondCaseTester.next().value;
+          const serverSocket = connectToServer(movie);
 
-        serverSocket.emit(operation, movie);
+          serverSocket.emit(operation, movie);
+        }
       }
+    });
+
+    masterSocket.on("updateMeta", (meta) => {
+      metadata = meta;
     });
   });
 
@@ -41,14 +47,13 @@ function connectToServer({ year }) {
 
 connectToMaster();
 
-function clientTest2(index) {
+function* clientTest2(i) {
   const { operations, movies } = secondTestcase;
-  // while(index < operations.length){
-  //   let query = {
-  //     operation: operations[index],
-  //     movie: movies[index]
-  //   };
-  //   yield query;
-  //   index++;
-  // }
+
+  for (; i < operations.length; i++) {
+    yield {
+      operation: operations[i],
+      movie: movies[i],
+    };
+  }
 }
