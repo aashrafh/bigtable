@@ -1,6 +1,6 @@
 const ioClient = require("socket.io-client");
 
-const masterURL = "http://localhost:8080";
+const masterURL = "http://localhost:8000";
 
 let metadata = {};
 let master = null;
@@ -9,10 +9,11 @@ function connectToMaster() {
   const masterSocket = ioClient(masterURL);
 
   masterSocket.on("connect", () => {
+    // masterSocket.emit("CLient");
     masterSocket.on("sendMeta", (meta) => {
       metadata = meta;
       console.log("Client: Successfully recieved metadata", metadata);
-      if (metadata) {
+      if (metadata !== {}) {
         const operation = "ReadRows";
         const movie = { title: "Split", year: "2016" };
         const serverSocket = connectToServer(movie);

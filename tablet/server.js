@@ -14,6 +14,7 @@ const ioServer = require("socket.io");
 let master = null;
 let tablets = [];
 let port = 3000;
+let serverIndex = 0;
 
 mongoose.connect(`${constants.connectionString}`, {
   useNewUrlParser: true,
@@ -21,7 +22,8 @@ mongoose.connect(`${constants.connectionString}`, {
 });
 
 const readRows = async (movie) => {
-  return await MovieModel.find({ title: movie.title }).sort({ year: 1 });
+  let { year, title } = movie;
+  return await MovieModel.find({ year: year, title: title }).sort({ year: 1 });
 };
 
 const addRow = async (movie) => {
@@ -30,7 +32,7 @@ const addRow = async (movie) => {
 };
 
 const deleteRows = async (movie) => {
-  return await MovieModel.deleteOne({ title: movie.title });
+  return await MovieModel.deleteOne({ year: movie.year, title: movie.title });
 };
 
 const deleteCells = async (movie, cells) => {
@@ -41,7 +43,7 @@ const deleteCells = async (movie, cells) => {
 
 const setRow = async (movie) => {
   return await MovieModel.updateOne(
-    { title: movie.title },
+    { title: movie.title, year: movie.year },
     {
       $set: movie,
     }
@@ -61,10 +63,10 @@ function connectToClient() {
         const movie = await setRow(Movie);
         if (movie !== null) {
           socket.emit("successful", "Set Rows");
-          socketClient.emit("operation", "successfully", "Set Cells", movie);
+          master.emit("operation", "successfully", "Set Cells", serverIndex);
         } else {
           socket.emit("unsuccessful", "Set Rows");
-          socketClient.emit("operation", "unsuccessfully", "Set Cells", movie);
+          master.emit("operation", "unsuccessfully", "Set Cells", serverIndex);
         }
       });
 
@@ -73,10 +75,10 @@ function connectToClient() {
         const movie = await addRow(Movie);
         if (movie !== null) {
           socket.emit("successful", "Add Row");
-          socketClient.emit("operation", "successfully", "Add Row", movie);
+          master.emit("operation", "successfully", "Add Row", serverIndex);
         } else {
           socket.emit("unsuccessful", "Add Row");
-          socketClient.emit("operation", "unsuccessfully", "Add Row", movie);
+          master.emit("operation", "unsuccessfully", "Add Row", serverIndex);
         }
       });
 
@@ -85,21 +87,14 @@ function connectToClient() {
         const movie = await deleteCells(Movie, Cells);
         if (movie !== null) {
           socket.emit("successful", "delete Cells");
-          socketClient.emit(
-            "operation",
-            "successfully",
-            "delete cells",
-            movie,
-            cells
-          );
+          master.emit("operation", "successfully", "delete cells", serverIndex);
         } else {
           socket.emit("unsuccessful", "delete Cells");
-          socketClient.emit(
+          master.emit(
             "operation",
             "unsuccessfully",
             "delete Cells",
-            movie,
-            cells
+            serverIndex
           );
         }
       });
@@ -109,10 +104,10 @@ function connectToClient() {
         const movie = await deleteRows(Movie);
         if (movie !== null) {
           socket.emit("successful", "delete Row");
-          socketClient.emit("operation", "successfully", "delete Row", movie);
+          master.emit("operation", "successfully", "delete Row", serverIndex);
         } else {
           socket.emit("unsuccessful", "delete Row");
-          socketClient.emit("operation", "unsuccessfully", "delete Row", movie);
+          master.emit("operation", "unsuccessfully", "delete Row", serverIndex);
         }
       });
 
@@ -123,10 +118,10 @@ function connectToClient() {
         if (movies !== null) {
           socket.emit("successful", "Read Row");
           socket.emit("read", movies);
-          socketClient.emit("operation", "successfully", "Read Row", movies);
+          master.emit("operation", "successfully", "Read Row", serverIndex);
         } else {
           socket.emit("unsuccessful", "Read Row");
-          socketClient.emit("operation", "unsuccessfully", "Read Row", movies);
+          master.emit("operation", "unsuccessfully", "Read Row", serverIndex);
         }
       });
     });
@@ -137,9 +132,11 @@ function connectToMaster() {
   const masterSocket = ioClient(masterURL);
   masterSocket.on("connect", () => {
     console.log("Connected to the master");
+    // masterSocket.emit("Server");
     masterSocket.on("sendTablets", (res) => {
       tablets = res.tablets;
       if (res.index == 1) port = 4000;
+      serverIndex = res.index;
       console.log("Recieved number of tablets = ", tablets.length);
       connectToClient();
     });
@@ -148,7 +145,3 @@ function connectToMaster() {
 }
 
 connectToMaster();
-
-// 1- When to emit 'serverWrite' event ?
-// 2- We need to lock server operations
-// 3- Modify the operations to be based on year as a row key

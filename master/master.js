@@ -1,3 +1,5 @@
+const fs = require("fs");
+
 const mongoose = require("mongoose");
 const constants = require("../scripts/constants");
 const MovieModel = require("../Movie_model");
@@ -5,6 +7,7 @@ const MetadataModel = require("../metadataModel");
 
 const express = require("express");
 const app = express();
+const clientApp = express();
 const http = require("http");
 const master = http.createServer(app);
 const ioServer = require("socket.io");
@@ -13,6 +16,7 @@ let metadata = {};
 let tablets = [];
 let servers = [];
 let clients = [];
+let serverCounts = [];
 let tabletServerCount = 0;
 
 mongoose.connect(`${constants.connectionString}`, {
@@ -37,6 +41,8 @@ async function divideTables(Movie) {
       endYear: tablets[(i + 1) * tabletSize - 1]["year"],
     });
   }
+  serverCounts.push(Math.floor(tablets.length / 2));
+  serverCounts.push(Math.floor(tablets.length / 2));
   return rangeKeys;
 }
 
@@ -61,7 +67,7 @@ async function tabletsToServers(meta) {
 
 function buildMeta(rangeKeys) {
   if (!tabletServerCount) return {};
-  else if (tabletServerCount === 1)
+  else if (tabletServerCount < 1)
     return {
       firstServer: {
         setA: {
@@ -124,6 +130,7 @@ function send(meta) {
 
 function processMeta(rangeKeys) {
   metadata = buildMeta(rangeKeys);
+  console.log("afterbuild", metadata);
   metadataTable = MetadataModel;
   metadataTable.collection.insertOne(metadata, function (err, metadata) {
     if (err) {
@@ -135,13 +142,49 @@ function processMeta(rangeKeys) {
 }
 
 async function balanceLoad() {
-  const Movie = MovieModel;
-  divideTables(Movie).then((rangeKeys) => {
-    processMeta(rangeKeys);
-    send(metadata);
-  });
+  if (Math.abs(serverCounts[0] - serverCounts[1]) > 10) {
+    const Movie = MovieModel;
+    divideTables(Movie).then((rangeKeys) => {
+      processMeta(rangeKeys);
+      send(metadata);
+    });
+    let content = `Re-balanced the tablets division and updated the metadata\n`;
+    fs.appendFile("logFile.log", content, (err) => {
+      if (err) console.log(err);
+    });
+  }
 }
 
+function handleLogging() {
+  for (socket of servers) {
+    socket.on("operation", (status, type, index) => {
+      let content = `The operation of ${type} has  +  ((status == 'unsuccessfully' )? not : '')  + been done\n`;
+
+      const today = new Date();
+      const date =
+        today.getFullYear() +
+        "-" +
+        (today.getMonth() + 1) +
+        "-" +
+        today.getDate();
+      const time =
+        today.getHours() + ":" + today.getMinutes() + ":" + today.getSeconds();
+      const dateTime = date + " " + time;
+      content += `at timestamp ${dateTime}\n`;
+      fs.appendFile("logFile.log", content, (err) => {
+        if (err) console.log(err);
+      });
+
+      if (type === "Add Row") {
+        serverCounts[index]++;
+        balanceLoad();
+      } else if (type === "delete Row") {
+        serverCounts[index]--;
+        balanceLoad();
+      }
+    });
+  }
+}
 async function asignServers() {
   const Movie = MovieModel;
   divideTables(Movie)
@@ -151,18 +194,21 @@ async function asignServers() {
 
       const ioMaster = ioServer(master);
       ioMaster.on("connection", (socket) => {
+        processMeta(rangeKeys);
+        // console.log("Some server/client are trying to connect...");
         servers.push(socket);
         console.log(
           "Master: new server has attached with index: ",
           tabletServerCount++
         );
 
-        send(metadata);
+        // send(metadata);
         balanceLoad();
 
-        socket.on("serverWrite", () => {
-          balanceLoad();
-        });
+        // socket.on("serverWrite", () => {
+        //   balanceLoad();
+        // });
+        handleLogging();
 
         socket.on("disconnect", () => {
           servers = servers.filter(
@@ -179,20 +225,28 @@ async function asignServers() {
     });
 }
 
+function listenToClient(clientServer) {
+  clientServer.listen(8000, () => {
+    console.log("Master: listening to clients on *:8000");
+  });
+}
+
 function connectToClient() {
-  const clientServer = http.createServer(app);
+  const clientServer = http.createServer(clientApp);
   const clientSocket = ioServer(clientServer);
   clientSocket.on("connection", (socket) => {
     clients.push(socket);
     console.log("Master: a new client has connected successfully");
+    console.log(metadata);
     socket.emit("sendMeta", metadata);
   });
+
+  listenToClient(clientServer);
 }
 
 asignServers()
   .then((res) => {
     console.log("Assigned!!");
-    connectToClient();
     console.log("Connected to Clients!!");
   })
   .catch((err) => {
@@ -200,5 +254,6 @@ asignServers()
   });
 
 master.listen(8080, () => {
-  console.log("Master: listening on *:8080");
+  console.log("Master: listening to servers on *:8080");
 });
+connectToClient();
