@@ -159,7 +159,25 @@ async function balanceLoad() {
     divideTables(Movie).then((rangeKeys) => {
       processMeta(rangeKeys);
       updateMeta(metadata);
-      let content = `Re-balanced the tablets division and updated the metadata\n`;
+      
+      let content = `Re-balanced the tablets division and updated the metadata at\n`;
+      const today = new Date();
+      const date =
+        today.getFullYear() +
+        "-" +
+        (today.getMonth() + 1) +
+        "-" +
+        today.getDate();
+      const time =
+        today.getHours() +
+        ":" +
+        today.getMinutes() +
+        ":" +
+        today.getSeconds() +
+        ":" +
+        today.getMilliseconds();
+      const dateTime = date + " " + time;
+      content += ` at timestamp ${dateTime}\n`;
       fs.appendFile("logFile.log", content, (err) => {
         if (err) console.log(err);
       });
