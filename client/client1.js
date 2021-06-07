@@ -20,7 +20,7 @@ function connectToMaster() {
           const { operation, movie , cells } = firstCaseTester.next().value;
           const serverSocket = connectToServer(movie);
 
-          serverSocket.emit(operation, movie,cells);
+          serverSocket.emit(operation, [movie],cells);
         }
       }
     });
