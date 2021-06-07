@@ -2,9 +2,8 @@ const express = require("express");
 const app = express();
 const http = require("http");
 const tabletServer = http.createServer(app);
-let AsyncLock = require('async-lock');
+let AsyncLock = require("async-lock");
 let lock = new AsyncLock();
-
 
 const mongoose = require("mongoose");
 const MovieModel = require("../Movie_model");
@@ -26,79 +25,105 @@ mongoose.connect(`${constants.connectionString}`, {
 
 const readRows = async (movie) => {
   let returnedMovie = {};
-  lock.acquire("year", function(done) {
-    console.log("lock read enter")
-     MovieModel.find(movie, (err,ret) => {
-      returnedMovie = ret;
-    }).sort({ year: 1 });
-  }, function(err, ret) {
-    console.log("lock read release")
-  }, {});
+  lock.acquire(
+    movie.year,
+    function (done) {
+      console.log("lock read enter");
+      MovieModel.find(movie, (err, ret) => {
+        returnedMovie = ret;
+      }).sort({ year: 1 });
+    },
+    function (err, ret) {
+      console.log("lock read release");
+    },
+    {}
+  );
   return returnedMovie;
 };
 
 const addRow = async (movie) => {
-
   let returnedMovie = {};
-  lock.acquire("year", function(done) {
-    console.log("lock add row enter")
-    let movieToSave = new MovieModel(movie);
-    movieToSave.save((err,res) => {
-      returnedMovie = res
-    });
-  }, function(err, ret) {
-    console.log("lock add row release")
-  }, {});
+  lock.acquire(
+    movie.year,
+    function (done) {
+      console.log("lock add row enter");
+      let movieToSave = new MovieModel(movie);
+      movieToSave.save((err, res) => {
+        returnedMovie = res;
+      });
+    },
+    function (err, ret) {
+      console.log("lock add row release");
+    },
+    {}
+  );
   return returnedMovie;
 };
 
 const deleteRows = async (movie) => {
-
   let returnedMovie = {};
-  lock.acquire("year", function(done) {
-    console.log("lock delete rows enter")
-    MovieModel.deleteOne(movie,(err,ret)=>{
-      returnedMovie = ret;
-    });
-  }, function(err, ret) {
-    console.log("lock delete rows release")
-  }, {});
+  lock.acquire(
+    movie.year,
+    function (done) {
+      console.log("lock delete rows enter");
+      MovieModel.deleteOne(movie, (err, ret) => {
+        returnedMovie = ret;
+      });
+    },
+    function (err, ret) {
+      console.log("lock delete rows release");
+    },
+    {}
+  );
   return returnedMovie;
 };
 
 const deleteCells = async (movie, cells) => {
-
-
   let returnedMovie = {};
-  lock.acquire("year", function(done) {
-    console.log("lock delete cells enter")
-    MovieModel.updateOne(movie, {
-      $unset: cells,
-    },(err,ret) => {
-      returnedMovie =ret;
-    });
-  }, function(err, ret) {
-    console.log("lock delete cells release")
-  }, {});
+  lock.acquire(
+    movie.year,
+    function (done) {
+      console.log("lock delete cells enter");
+      MovieModel.updateOne(
+        movie,
+        {
+          $unset: cells,
+        },
+        (err, ret) => {
+          returnedMovie = ret;
+        }
+      );
+    },
+    function (err, ret) {
+      console.log("lock delete cells release");
+    },
+    {}
+  );
   return returnedMovie;
 };
 
 const setRow = async (movie) => {
-
   let returnedMovie = {};
-  lock.acquire("year", function(done) {
-    console.log("lock set enter")
-    MovieModel.updateOne(
-      movie,
-      {
-        $set: movie,
-      }
-    ,(err,ret) => {returnedMovie = ret});
-  }, function(err, ret) {
-    console.log("lock set release")
-  }, {});
+  lock.acquire(
+    movie.year,
+    function (done) {
+      console.log("lock set enter");
+      MovieModel.updateOne(
+        movie,
+        {
+          $set: movie,
+        },
+        (err, ret) => {
+          returnedMovie = ret;
+        }
+      );
+    },
+    function (err, ret) {
+      console.log("lock set release");
+    },
+    {}
+  );
   return returnedMovie;
-
 };
 
 function connectToClient() {
