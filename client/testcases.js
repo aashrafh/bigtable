@@ -1,4 +1,99 @@
 module.exports = {
+  firstTestCase: {
+    operations: [
+      'ReadRows',
+      'ReadRows',
+      'AddRow',
+      'ReadRows',
+      'Set',
+      'ReadRows',
+      'DeleteCells',
+      'ReadRows',
+      'DeleteRow',
+      'ReadRows'
+    ],
+    movies: [
+      { year: 2010 },
+      { year: 2018 },
+      {
+        title: 'New Movie',
+        year: 2020,
+        imdb_title_id: 'tt31561181132',
+        original_title: 'Misery',
+        date_published: '2021-06-07',
+        genre: 'Drama, Tragedy',
+        duration: 20,
+        country: 'Egypt',
+        language: 'Arabic',
+        director: 'NO one',
+        writer: 'The best',
+        production_company: 'CMP Faculty of engineering',
+        actors: 'No actors',
+        description: 'No life',
+        avg_vote: 10,
+        votes: 73,
+        budget: 0,
+        usa_gross_income: '',
+        worldwide_gross_income: '',
+        metascore: null,
+        reviews_from_users: 8,
+        reviews_from_critics: null
+      },
+      {
+        title: 'New Movie',
+        year: 2020
+      },
+      {
+        title: 'New Movie',
+        year: 2020,
+        imdb_title_id: 'tt31561181132',
+        original_title: 'Misery',
+        date_published: '2021-06-07',
+        genre: 'Comedy',
+        description: 'No life',
+        avg_vote: 8.4,
+        votes: 342,
+        budget: 0,
+        usa_gross_income: '',
+        worldwide_gross_income: '',
+        metascore: null,
+        reviews_from_users: 8,
+        reviews_from_critics: null
+      },
+      {
+        title: 'New Movie',
+        year: 2020
+      },
+      {
+        title: 'New Movie',
+        year: 2020
+      },
+      {
+        title: 'New Movie',
+        year: 2020
+      },
+      {
+        title: 'New Movie',
+        year: 2020
+      },
+      {
+        title: 'New Movie',
+        year: 2020
+      }
+    ],
+    cells: [
+      [],
+      [],
+      [],
+      [],
+      [],
+      [],
+      ['usa_gross_income', 'worldwide_gross_income', 'metascore', 'reviews_from_users', 'reviews_from_critics'],
+      [],
+      [],
+      []
+    ]
+  },
   secondTestcase: {
     operations: [
       "Set",

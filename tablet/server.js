@@ -2,6 +2,9 @@ const express = require("express");
 const app = express();
 const http = require("http");
 const tabletServer = http.createServer(app);
+let AsyncLock = require('async-lock');
+let lock = new AsyncLock();
+
 
 const mongoose = require("mongoose");
 const MovieModel = require("../Movie_model");
@@ -22,32 +25,80 @@ mongoose.connect(`${constants.connectionString}`, {
 });
 
 const readRows = async (movie) => {
-  let { year, title } = movie;
-  return await MovieModel.find({ year: year, title: title }).sort({ year: 1 });
+  let returnedMovie = {};
+  lock.acquire("year", function(done) {
+    console.log("lock read enter")
+     MovieModel.find(movie, (err,ret) => {
+      returnedMovie = ret;
+    }).sort({ year: 1 });
+  }, function(err, ret) {
+    console.log("lock read release")
+  }, {});
+  return returnedMovie;
 };
 
 const addRow = async (movie) => {
-  let movieToSave = new MovieModel(movie);
-  return await movieToSave.save();
+
+  let returnedMovie = {};
+  lock.acquire("year", function(done) {
+    console.log("lock add row enter")
+    let movieToSave = new MovieModel(movie);
+    movieToSave.save((err,res) => {
+      returnedMovie = res
+    });
+  }, function(err, ret) {
+    console.log("lock add row release")
+  }, {});
+  return returnedMovie;
 };
 
 const deleteRows = async (movie) => {
-  return await MovieModel.deleteOne({ year: movie.year, title: movie.title });
+
+  let returnedMovie = {};
+  lock.acquire("year", function(done) {
+    console.log("lock delete rows enter")
+    MovieModel.deleteOne(movie,(err,ret)=>{
+      returnedMovie = ret;
+    });
+  }, function(err, ret) {
+    console.log("lock delete rows release")
+  }, {});
+  return returnedMovie;
 };
 
 const deleteCells = async (movie, cells) => {
-  return await MovieModel.updateOne(movie, {
-    $unset: cells,
-  });
+
+
+  let returnedMovie = {};
+  lock.acquire("year", function(done) {
+    console.log("lock delete cells enter")
+    MovieModel.updateOne(movie, {
+      $unset: cells,
+    },(err,ret) => {
+      returnedMovie =ret;
+    });
+  }, function(err, ret) {
+    console.log("lock delete cells release")
+  }, {});
+  return returnedMovie;
 };
 
 const setRow = async (movie) => {
-  return await MovieModel.updateOne(
-    { title: movie.title, year: movie.year },
-    {
-      $set: movie,
-    }
-  );
+
+  let returnedMovie = {};
+  lock.acquire("year", function(done) {
+    console.log("lock set enter")
+    MovieModel.updateOne(
+      movie,
+      {
+        $set: movie,
+      }
+    ,(err,ret) => {returnedMovie = ret});
+  }, function(err, ret) {
+    console.log("lock set release")
+  }, {});
+  return returnedMovie;
+
 };
 
 function connectToClient() {
@@ -64,7 +115,7 @@ function connectToClient() {
         if (movie !== null) {
           socket.emit("successful", "Set Rows");
           master.emit("operation", "successfully", "Set Cells", serverIndex);
-          console.log("Successfull Set: ", movie);
+          console.log("Successfull Set: ");
         } else {
           socket.emit("unsuccessful", "Set Rows");
           master.emit("operation", "unsuccessfully", "Set Cells", serverIndex);
@@ -77,7 +128,7 @@ function connectToClient() {
         if (movie !== null) {
           socket.emit("successful", "Add Row");
           master.emit("operation", "successfully", "Add Row", serverIndex);
-          console.log("Successfull AddRow: ", movie);
+          console.log("Successfull AddRow: ");
         } else {
           socket.emit("unsuccessful", "Add Row");
           master.emit("operation", "unsuccessfully", "Add Row", serverIndex);
@@ -90,7 +141,7 @@ function connectToClient() {
         if (movie !== null) {
           socket.emit("successful", "delete Cells");
           master.emit("operation", "successfully", "delete cells", serverIndex);
-          console.log("Successfull DeleteCells: ", movie);
+          console.log("Successfull DeleteCells: ");
         } else {
           socket.emit("unsuccessful", "delete Cells");
           master.emit(
@@ -108,7 +159,7 @@ function connectToClient() {
         if (movie !== null) {
           socket.emit("successful", "delete Row");
           master.emit("operation", "successfully", "delete Row", serverIndex);
-          console.log("Successfull DeleteRow: ", movie);
+          console.log("Successfull DeleteRow: ");
         } else {
           socket.emit("unsuccessful", "delete Row");
           master.emit("operation", "unsuccessfully", "delete Row", serverIndex);
@@ -123,7 +174,7 @@ function connectToClient() {
           socket.emit("successful", "Read Row");
           // socket.emit("read", movies);
           master.emit("operation", "successfully", "Read Row", serverIndex);
-          console.log("Successfull ReadRows: ", movie);
+          console.log("Successfull ReadRows: ");
         } else {
           socket.emit("unsuccessful", "Read Row");
           master.emit("operation", "unsuccessfully", "Read Row", serverIndex);

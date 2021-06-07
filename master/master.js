@@ -31,7 +31,7 @@ db.once("open", function () {
 });
 
 async function divideTables(Movie) {
-  tablets = await Movie.find({}).sort({ year: 1 }).limit(100);
+  tablets = await Movie.find({}).sort({ year: 1 });
 
   const tabletSize = Math.floor(tablets.length / 4);
   console.log("Total docs in the database = ", tabletSize * 4);
