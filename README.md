@@ -26,3 +26,8 @@ A simulation if a distributed system to apply the BigTable concepts which has th
     - ```AddRow()```: add a new row
     - ```ReadRows()```: read a whole row
 
+## Tools
+- [Nodejs](https://nodejs.org/)
+- [MongoDB](https://www.mongodb.com/)
+- [Socket.IO](https://socket.io/)
+- [IMDb Movies](https://www.kaggle.com/trentpark/imdb-data?select=IMDb+movies.csv)
